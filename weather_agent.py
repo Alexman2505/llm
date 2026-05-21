@@ -1,42 +1,53 @@
 import asyncio
+import httpx
 from agno.agent import Agent
 from agno.models.ollama import Ollama
-import python_weather
 
 
 async def get_weather(city: str) -> str:
-    """Получает текущую погоду в городе."""
-    async with python_weather.Client() as client:
-        weather = await client.get(city)
-        return (
-            f"{weather.temperature}°C, ощущается как {weather.feels_like}°C. "
-            f"{weather.description}. Влажность: {weather.humidity}%"
-        )
+    """Получает текущую погоду через wttr.in (бесплатно, без ключа)"""
+    url = f"https://wttr.in/{city}?format=%t+%h+%w+%C"
+    # %t - температура, %h - влажность, %w - ветер, %C - описание
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, timeout=10)
+        data = response.text.strip()
+        # wttr.in возвращает что-то вроде: "+25°C 60% 15 km/h Sunny"
+
+        parts = data.split()
+        if len(parts) >= 4:
+            temp = parts[0].replace('+', '').replace('°C', '')
+            humidity = parts[1].replace('%', '')
+            wind = parts[2]
+            condition = ' '.join(parts[3:])
+            return (
+                f"{temp}°C, влажность {humidity}%, ветер {wind}, {condition}"
+            )
+        return data
 
 
+# Остальной код агента без изменений
 agent = Agent(
     name="Погодный помощник",
-    model=Ollama(id="llama3.2:3b"),  # Замените на вашу модель
+    model=Ollama(id="llama3.2:3b"),
     tools=[get_weather],
     instructions=[
         "Ты помощник, умеющий узнавать погоду через функцию get_weather",
-        "Если спрашивают про погоду — ОБЯЗАТЕЛЬНО вызови get_weather",
-        "Никогда не выдумывай погоду",
-        "Отвечай коротко и на русском",
+        "Всегда вызывай get_weather для получения актуальных данных",
+        "Отвечай кратко и на русском языке",
+        "Если пользователь не указал город, спроси его",
     ],
 )
 
 
 async def main():
-    print("🤖 Агент запущен. Задайте вопрос о погоде:\n")
-
+    print("🤖 Погодный агент запущен!\n")
     while True:
         user_input = input("👉 Вы: ")
-        if user_input.lower() in ["выход", "exit"]:
+        if user_input.lower() in ["выход", "exit", "quit"]:
             break
-
         response = await agent.arun(user_input)
-        print(f"\n🤖 {response.content}\n")
+        print(f"🤖 {response.content}\n")
 
 
 if __name__ == "__main__":
