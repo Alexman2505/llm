@@ -26,7 +26,6 @@ async def get_weather(city: str) -> str:
         return data
 
 
-# Остальной код агента без изменений
 agent = Agent(
     name="Погодный помощник",
     model=Ollama(id="llama3.2:3b"),
